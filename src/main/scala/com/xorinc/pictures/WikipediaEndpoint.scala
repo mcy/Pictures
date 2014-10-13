@@ -1,16 +1,14 @@
-package com.xorinc.pictures.wiki
+package com.xorinc.pictures
 
 import java.awt.image.BufferedImage
-import java.io.{InputStreamReader, BufferedReader}
+import java.io.{BufferedReader, InputStreamReader}
 import java.net.URL
 import javax.imageio.ImageIO
 
 import com.google.gson.{GsonBuilder, JsonParser}
-import com.xorinc.pictures.Main
 import org.apache.commons.lang.StringEscapeUtils
 
-import collection.JavaConverters._
-import scala.annotation.tailrec
+import scala.collection.JavaConverters._
 import scala.util.Random
 
 object WikipediaEndpoint {
@@ -28,7 +26,7 @@ object WikipediaEndpoint {
   private val imageExtensionWhitelist = Set(".png", ".jpg", ".jpeg")
 
   sealed trait PictureData
-  case class SomePictureData(name: String, img: BufferedImage, links: Seq[String]) extends PictureData
+  case class SomePictureData(name: String, img: BufferedImage, links: Seq[String], imgName: String) extends PictureData
   object NoPictureData extends PictureData
 
   private def extract(query: String) = {
@@ -71,10 +69,13 @@ object WikipediaEndpoint {
   }
 
 
-  def getPictureData0(title: String, errorCallback: () => PictureData) = {
+  private def getPictureData0(title: String, errorCallback: () => PictureData): PictureData = {
     val query = entryPoint +
       s"?format=json&action=query&titles=${title.replace(" ", "_")}&redirects&prop=images|links&plnamespace=0&pllimit=450"
-    val json = jparser.parse(extract(query)).getAsJsonObject
+    val _json = jparser.parse(extract(query))
+    if(!_json.isJsonObject)
+      return errorCallback()
+    val json = _json.getAsJsonObject
     val page = json.getAsJsonObject("query").getAsJsonObject("pages").entrySet().asScala.head.getValue.getAsJsonObject
     //println(gson.toJson(json))
     val name = page.getAsJsonPrimitive("title").getAsString
@@ -95,9 +96,9 @@ object WikipediaEndpoint {
         val bImage = ImageIO.read(new URL(getImageUrl(imageLoc)))
         val links = page.getAsJsonArray("links").asScala
           .map(_.getAsJsonObject.getAsJsonPrimitive("title").getAsString
-          .toUpperCase.replaceAll("[^A-Z ]|\\(.+\\)", "").trim.replace(" ", "*"))
+          .replaceAll("[^A-Za-z ]|\\(.+\\)", "").trim.replace(" ", "*"))
           .filter(_ != "")
-        SomePictureData(name, bImage, links.toSeq)
+        SomePictureData(name, bImage, links.toSeq, imageLoc)
       }
     }
   }

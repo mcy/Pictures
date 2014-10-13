@@ -1,64 +1,69 @@
 package com.xorinc.pictures
 
-import java.awt.event.ActionEvent
-import java.awt.{GridBagConstraints, Font, GridBagLayout}
-import java.io.{FileReader, BufferedReader, File}
+import java.awt._
+import java.io.File
 import javax.imageio.ImageIO
 import javax.swing._
 import javax.swing.border.EtchedBorder
-
-import com.xorinc.pictures.ascii.{AsciiConverter => Ascii}
-import com.xorinc.pictures.wiki.WikipediaEndpoint
-import com.xorinc.pictures.wiki.WikipediaEndpoint.{NoPictureData, SomePictureData}
+import WikipediaEndpoint._
+import com.xorinc.pictures.GuiUtils._
 
 import scala.collection.mutable
 
 object Main {
 
-
-
   lazy val gui = new JFrame() {
+
+    lazy val (screenWidth, screenHeight) = {
+      val toolkit = Toolkit.getDefaultToolkit
+      val size = toolkit.getScreenSize
+      (size.getWidth.toInt, size.getHeight.toInt)
+    }
 
     object History {
 
-      import collection.mutable.ArraySeq
+      private val history = mutable.ArrayBuffer.empty[SomePictureData]
 
-      private val history = mutable.ArrayBuffer[SomePictureData]()
+      private var currentIndex = 0
 
-      private var currentIndex = -1
+
+      def updateArrows() = {
+        prev.setEnabled(currentIndex > 0)
+        next.setEnabled(currentIndex < history.length - 1)
+      }
 
       def back() = {
         currentIndex -= 1
         makeNewImage(history(currentIndex))
-        if(currentIndex <= 0)
-          prev.setEnabled(false)
-        if(currentIndex < history.length - 1)
-          next.setEnabled(true)
+        updateArrows()
       }
       def forward() = {
         currentIndex += 1
         makeNewImage(history(currentIndex))
-        if(currentIndex > 0)
-          prev.setEnabled(true)
-        if(currentIndex >= history.length - 1)
-          next.setEnabled(false)
+        updateArrows()
       }
 
       def apply(s: SomePictureData) = {
-        if(history.find(p => p.name == s.name && p.img == s.img).isEmpty) {
-          history += s
-          currentIndex = history.size - 1
-          prev.setEnabled(history.length > 1)
-          next.setEnabled(false)
+        history.zipWithIndex.find(p => p._1.name == s.name && p._1.imgName == s.imgName) match {
+          case Some((_, index)) => currentIndex = index
+          case None =>
+            history += s
+            currentIndex = history.size - 1
         }
+        updateArrows()
+      }
+
+      def now() = {
+        if(currentIndex >= 0)
+          makeNewImage(history(currentIndex))
       }
     }
 
     import JFrame._
-    import com.xorinc.pictures.gui.GuiUtils._
+    import GuiUtils._
 
     setTitle("Wikipicture")
-    setLayout(new GridBagLayout)
+    setLayout(new BorderLayout)
     setDefaultCloseOperation(EXIT_ON_CLOSE)
 
     val console = new JTextArea(100, 450)
@@ -73,33 +78,48 @@ object Main {
         ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
         ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED
       ),
-      Layout (
-        x = 0,
-        y = 0,
-        width = 6,
-        anchor = North
-      )
+      BorderLayout.CENTER
     )
 
-    val newButton = new JButton("New Image")
+    val controls = new JPanel(new GridBagLayout)
+
+    add (
+      controls,
+      BorderLayout.SOUTH
+    )
+
+    val newButton = new JButton("Random Page")
     newButton act {
       makeNewImage(WikipediaEndpoint.generateRandomPageData())
     }
 
-    add (
+    controls.add (
       newButton,
       Layout(
         x = 0,
-        y = 1,
+        y = 0,
         anchor = East
       )
     )
 
-    add (
+    controls.add (
       panel (BorderFactory.createEtchedBorder(EtchedBorder.LOWERED)) { p =>
 
         val articleField = new JTextField(35)
         articleField.setFont(new Font("Menlo", Font.PLAIN, 12))
+
+        def query() = {
+          WikipediaEndpoint.getPictureData(articleField.getText) match {
+            case x: SomePictureData => makeNewImage(x)
+            case NoPictureData => articleField.setText("No picture! =(")
+          }
+        }
+
+        articleField typed { c =>
+          if(c == '\n')
+            query()
+        }
+
         p.add (
           articleField,
           Layout(
@@ -110,10 +130,7 @@ object Main {
 
         val articleButton = new JButton("Fetch Page")
         articleButton act {
-          WikipediaEndpoint.getPictureData(articleField.getText) match {
-            case x: SomePictureData => makeNewImage(x)
-            case NoPictureData => articleField.setText("No picture! =(")
-          }
+          query()
         }
         p.add (
           articleButton,
@@ -122,10 +139,12 @@ object Main {
             y = 0
           )
         )
+
+
       },
       Layout(
         x = 1,
-        y = 1,
+        y = 0,
         anchor = West
       )
     )
@@ -133,7 +152,7 @@ object Main {
     val prev = new JButton("<-")
     val next = new JButton("->")
 
-    add (
+    controls.add (
       panel (BorderFactory.createEtchedBorder(EtchedBorder.LOWERED)) { p =>
         prev.setEnabled(false)
         prev act {
@@ -161,67 +180,57 @@ object Main {
       },
       Layout(
         x = 2,
-        y = 1,
+        y = 0,
         anchor = West
       )
     )
 
-    val useRandom = new JCheckBox()
+    val (useRandom, randomPan) = checkbox("  Random image:")
 
-    add (
-      panel (null) { p =>
-        p.add(
-          new JLabel("  Use random article image:"),
-          Layout(
-            x = 0,
-            y = 0
-          )
-        )
-        p.add(
-          useRandom,
-          Layout(
-            x = 1,
-            y = 0
-          )
-        )
-      },
+    controls.add (
+      randomPan,
       Layout(
         x = 3,
-        y = 1,
+        y = 0,
         anchor = West
       )
     )
 
-    val invert = new JCheckBox()
+    val (invert, invertPan) = checkboxAct(" Invert colors:") { box =>
+      if(box.isSelected){
+        console.setBackground(Color.BLACK)
+        console.setForeground(Color.WHITE)
+      } else {
+        console.setBackground(Color.WHITE)
+        console.setForeground(Color.BLACK)
+      }
+      History.now()
+    }
 
-    add (
-      panel (null) { p =>
-        p.add(
-          new JLabel(" Invert colors:"),
-          Layout(
-            x = 0,
-            y = 0
-          )
-        )
-        p.add(
-          invert,
-          Layout(
-            x = 1,
-            y = 0
-          )
-        )
-      },
+    controls.add (
+      invertPan,
       Layout(
         x = 4,
-        y = 1,
+        y = 0,
         anchor = West
       )
     )
 
+    //this.setSize(screenWidth, screenHeight - 24)
     setResizable(false)
     pack()
     setLocationRelativeTo(null)
     setVisible(true)
+
+    History(
+      SomePictureData(
+        "Ascii Wikipedia Browser",
+        ImageIO.read(this.getClass.getResourceAsStream("/titlecard.png")),
+        Nil,
+        ""
+      )
+    )
+
 
     def consoleSize = (console.getColumns, console.getRows)
 
@@ -232,9 +241,11 @@ object Main {
       History(data)
       console.setText(Ascii.center(Ascii.insertWords(picture, data.links), consoleSize))
     }
+
+    def init() = History.now()
   }
 
   def main(args: Array[String]): Unit = {
-    gui
+    gui.init()
   }
 }

@@ -1,15 +1,14 @@
-package com.xorinc.pictures.ascii
+package com.xorinc.pictures
 
 import java.awt.image.BufferedImage
 import java.io.InputStreamReader
 
 import com.google.gson.JsonParser
-import com.xorinc.pictures.Main
 
 import scala.collection.JavaConverters._
 import scala.util.Random
 
-object AsciiConverter {
+object Ascii {
 
   private val rand = new Random
   private val (colors, aspectRatio) = {
@@ -20,15 +19,15 @@ object AsciiConverter {
     val asp = json.getAsJsonObject.get("aspect_ratio").getAsDouble
     val arr = json.getAsJsonObject.getAsJsonObject("charset").entrySet().asScala.toArray.map{e =>
       (e.getValue.getAsDouble, e.getKey()(0))
-    }
+    }.sortBy(_._1)
     val max = arr.maxBy(_._1)._1
     (arr.map(t => (t._1 / max, t._2)), asp)
   }
 
   def center(s: String, canvas: (Int, Int)) = {
     val lines = s.split("\n")
-    val sidePadding = "~" * ((canvas._1 - lines(0).length)/2)
-    val topPadding = "~" * ((canvas._2 - lines.length)/2)
+    val sidePadding = " " * ((canvas._1 - lines(0).length)/2)
+    val topPadding = (" " * Main.gui.consoleSize._1 + "\n") * ((canvas._2 - lines.length)/2)
     topPadding + lines.map(sidePadding + _ + sidePadding).mkString("\n") + topPadding
   }
 
@@ -51,7 +50,7 @@ object AsciiConverter {
   def insertWords(image: String, words: Seq[String]) = {
     val replacements = rand.shuffle(words.distinct).take(100)
     replacements.fold(image){ (i, r) =>
-      val reps = rand.shuffle(s"[A-Z]{${r.length}}".r.findAllMatchIn(i).toSeq)
+      val reps = rand.shuffle(s"[A-Za-z$$]{${r.length}}".r.findAllMatchIn(i).toSeq)
       if(reps.isEmpty){
         i
       }
@@ -84,9 +83,9 @@ object AsciiConverter {
                 )
             })._3
             if(invert)
-              getChar(1 - hsl)
-            else
               getChar(hsl)
+            else
+              getChar(1-hsl)
           }
     chars.map(_.mkString("")).mkString("\n")
   }
@@ -94,6 +93,7 @@ object AsciiConverter {
   def getChar(color: Int): Char = getChar(color / 255.0)
   def getChar(color: Double) = {
     def next(d: Double, l: Array[(Double, Char)]): Char = {
+      //println(l.mkString("[", ",", "]"))
       val mid = (l.length - 1)/2
       if(l(mid)._1 == d) l(mid)._2
       else if(l.length == 2){
@@ -102,7 +102,7 @@ object AsciiConverter {
         if(d - d1 < d2 - d)
           c1
         else c2
-      } else if (l(mid)._1 > d)
+      } else if (l(mid)._1 < d)
         next(d, l.takeRight(l.length/2))
       else
         next(d, l.take(l.length/2))

@@ -1,12 +1,10 @@
 package com.xorinc.pictures
 
 import java.awt._
-import java.io.File
 import javax.imageio.ImageIO
 import javax.swing._
 import javax.swing.border.EtchedBorder
 import WikipediaEndpoint._
-import com.xorinc.pictures.GuiUtils._
 
 import scala.collection.mutable
 
@@ -216,6 +214,19 @@ object Main {
       )
     )
 
+    val (overlay, overlayPan) = checkboxAct(" Disable article overlay:") { box =>
+      History.now()
+    }
+
+    controls.add (
+      overlayPan,
+      Layout(
+        x = 5,
+        y = 0,
+        anchor = West
+      )
+    )
+
     //this.setSize(screenWidth, screenHeight - 24)
     setResizable(false)
     pack()
@@ -227,19 +238,22 @@ object Main {
         "Ascii Wikipedia Browser",
         ImageIO.read(this.getClass.getResourceAsStream("/titlecard.png")),
         Nil,
-        ""
+        "",
+        Nil
       )
     )
 
 
     def consoleSize = (console.getColumns, console.getRows)
 
-    def makeNewImage(data: SomePictureData) = {
+    def makeNewImage(data: SomePictureData): Unit = {
       val img = Ascii.scaleToFit(data.img, consoleSize)
       val picture = Ascii.toAscii(img)
       setTitle(data.name)
       History(data)
-      console.setText(Ascii.center(Ascii.insertWords(picture, data.links), consoleSize))
+      val text = Ascii.center(if(overlay.isSelected) picture else Ascii.insertArticle(picture, data.article), consoleSize)
+      //println(data.article)
+      console.setText(text)
     }
 
     def init() = History.now()

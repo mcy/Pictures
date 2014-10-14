@@ -24,7 +24,9 @@ object Ascii {
     (arr.map(t => (t._1 / max, t._2)), asp)
   }
 
-  def center(s: String, canvas: (Int, Int)) = {
+  private val chars = colors.zipWithIndex.map(t => (t._1._2, t._2)).toMap
+
+  def center(s: String, canvas: (Int, Int)): String = {
     val lines = s.split("\n")
     val sidePadding = " " * ((canvas._1 - lines(0).length)/2)
     val topPadding = (" " * Main.gui.consoleSize._1 + "\n") * ((canvas._2 - lines.length)/2)
@@ -64,13 +66,108 @@ object Ascii {
     }
   }
 
+  def processArticle(raw: Seq[String]): Seq[String] = {
+    import collection.mutable
+    //println(raw.mkString("\n"))
+    val res = mutable.ArrayBuffer.empty[String]
+    val buffer = new StringBuilder()
+    for(s <- raw){
+      buffer.append(" " + s)
+      if(rand.nextBoolean()){
+        res += buffer.toString().trim
+        buffer.clear()
+      }
+    }
+    //println(res.mkString("\n"))
+    rand.shuffle(res).take(5)
+  }
+
+  def insertArticle(image: String, text: Seq[String]): String = {
+    import collection.mutable
+    if(text.isEmpty) return image
+    val usedPoints = mutable.Set.empty[(Int, Int)]
+    val buf = new StringBuilder(image)
+    val lines = image.split("\n")
+    val width = lines(0).length
+    val height = lines.length
+
+    for(s <- processArticle(text)) {
+      val (locW, locH) = {
+        val w = rand.nextInt(width)
+        val h = rand.nextInt(height)
+        (w, h)
+      }
+      val c = lines(locH)(locW)
+      val allowedColors = {
+        val index = chars(c)
+        val slice = colors.slice(Math.max(0, index - 6), Math.min(colors.length - 1, index + 6))
+        slice.map(_._2).toSet
+      }
+
+      val region = {
+
+        val set = mutable.Set.empty[(Int, Int)]
+        val pixels = mutable.Stack[(Int, Int)]()
+
+        def add(x: Int, y: Int) = set += ((x, y))
+        def old(x: Int, y: Int) =
+          allowedColors(lines(y)(x)) && !set((x, y)) && !usedPoints((x, y))
+        def push(x: Int, y: Int) = pixels.push((x, y))
+        def next = pixels.pop()
+
+        push(locW, locH)
+
+        while (pixels.nonEmpty) {
+          val (x, y) = next
+          var y1 = y
+          while (y1 >= 0 && old(x, y1)) y1 -= 1
+          y1 += 1
+          var spanLeft, spanRight = false
+          while (y1 < height && old(x, y1)) {
+            add(x, y1)
+            if (x > 0 && spanLeft != old(x, y1)) {
+              if (old(x - 1, y1)) push(x - 1, y1)
+              spanLeft = !spanLeft
+            }
+            if (x < width - 1 && spanRight != old(x + 1, y1)) {
+              if (old(x + 1, y1)) push(x + 1, y1)
+              spanRight = !spanRight
+            }
+            y1 += 1
+          }
+        }
+        set.toSeq.sortBy(t => t._1 + t._2 * width)
+      }
+      val length = Math.min(region.size, s.length)
+
+      for (index <- 0 until length) {
+        val char = s(index)
+        val loc = region(index)
+        buf.setCharAt(loc._1 + loc._2 * width, char)
+      }
+      usedPoints ++ region
+    }
+    for(i <- 1 until height){
+      buf.setCharAt(i * (width+1) - 1, '\n')
+    }
+    buf.toString()
+  }
+
+  def toLightnessMap(image: BufferedImage): Array[Array[Double]] = {
+    val result = Array.fill(image.getWidth)(Array.fill(image.getHeight)(0.0))
+    for(x <- 0 until image.getWidth; y <- 0 until image.getHeight()){
+      result(x)(y) = lightness(image.getRGB(x, y))
+    }
+    result
+  }
+
   def toAscii(image: BufferedImage): String = {
     val invert = Main.gui.invert.isSelected
     val chars =
       for(y <- Iterator.tabulate((image.getHeight/aspectRatio).toInt)(_ * aspectRatio))
         yield for(x <- 0 until image.getWidth)
           yield {
-            val hsl = toHSL({
+            val hsl = lightness({
               val nextInt = (y + 0.5).toInt
               val upper = toTuple(image.getRGB(x, nextInt))
               val lower = toTuple(image.getRGB(x, nextInt + 1))
@@ -81,13 +178,26 @@ object Ascii {
                 (upper._2 * upperLength + lower._2 * lowerLength)./(2).toInt,
                 (upper._3 * upperLength + lower._3 * lowerLength)./(2).toInt
                 )
-            })._3
+            })
             if(invert)
               getChar(hsl)
             else
               getChar(1-hsl)
           }
     chars.map(_.mkString("")).mkString("\n")
+  }
+
+  private def pixel(image: BufferedImage, x: Int, y: Double) = {
+    val nextInt = (y + 0.5).toInt
+    val upper = toTuple(image.getRGB(x, nextInt))
+    val lower = toTuple(image.getRGB(x, nextInt + 1))
+    val upperLength = nextInt - y
+    val lowerLength = y + aspectRatio - nextInt
+    (
+      (upper._1 * upperLength + lower._1 * lowerLength)./(2).toInt,
+      (upper._2 * upperLength + lower._2 * lowerLength)./(2).toInt,
+      (upper._3 * upperLength + lower._3 * lowerLength)./(2).toInt
+    )
   }
 
   def getChar(color: Int): Char = getChar(color / 255.0)
@@ -110,7 +220,7 @@ object Ascii {
     next(color, colors)
   }
 
-  def toTuple(color: Int) = (color >> 16 & 0xff, color >> 8 & 0xff, color & 0xff)
+  private def toTuple(color: Int) = (color >> 16 & 0xff, color >> 8 & 0xff, color & 0xff)
   def toHSL(color: Int): (Double, Double, Double) = {
     toHSL(toTuple(color))
   }
@@ -140,5 +250,17 @@ object Ascii {
         else -1
     }
     (h, s, l)
+  }
+
+  def lightness(color: Int): Double = lightness(toTuple(color))
+  def lightness(color: (Int, Int, Int)): Double = {
+    val r = color._1/255.0
+    val g = color._2/255.0
+    val b = color._3/255.0
+
+    val max = Math.max(Math.max(r, g), b)
+    val min = Math.min(Math.min(r, g), b)
+
+    (max + min)/2
   }
 }

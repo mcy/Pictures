@@ -6,12 +6,14 @@ import java.net.URL
 import javax.imageio.ImageIO
 
 import com.google.gson.{GsonBuilder, JsonParser}
-import org.apache.commons.lang.StringEscapeUtils
+import org.apache.commons.lang3.StringEscapeUtils
 
 import scala.collection.JavaConverters._
 import scala.util.Random
 
 object WikipediaEndpoint {
+
+  private val articleCache = collection.mutable.Map.empty[String, Seq[String]]
 
   val entryPoint = "http://en.wikipedia.org/w/api.php"
   val jparser = new JsonParser
@@ -26,7 +28,7 @@ object WikipediaEndpoint {
   private val imageExtensionWhitelist = Set(".png", ".jpg", ".jpeg")
 
   sealed trait PictureData
-  case class SomePictureData(name: String, img: BufferedImage, links: Seq[String], imgName: String) extends PictureData
+  case class SomePictureData(name: String, img: BufferedImage, links: Seq[String], imgName: String, article: Seq[String]) extends PictureData
   object NoPictureData extends PictureData
 
   private def extract(query: String) = {
@@ -43,7 +45,7 @@ object WikipediaEndpoint {
     val json = jparser.parse(extract(query)).getAsJsonObject
     val page =
       json.getAsJsonObject("query").getAsJsonArray("random").get(0).getAsJsonObject
-    StringEscapeUtils.unescapeJavaScript(page.getAsJsonPrimitive("title").getAsString)
+    StringEscapeUtils.unescapeJson(page.getAsJsonPrimitive("title").getAsString)
   }
 
   def getImageUrl(url: String) = {
@@ -68,10 +70,20 @@ object WikipediaEndpoint {
       array.get(0).getAsString
   }
 
-
-  private def getPictureData0(title: String, errorCallback: () => PictureData): PictureData = {
+  def resolveRedirects(title: String) = {
     val query = entryPoint +
-      s"?format=json&action=query&titles=${title.replace(" ", "_")}&redirects&prop=images|links&plnamespace=0&pllimit=450"
+      s"?action=query&format=json&titles=${title.replace(" ", "_")}&redirects"
+    val json = jparser.parse(extract(query))
+    json.getAsJsonObject
+      .getAsJsonObject("query").getAsJsonObject("pages")
+      .entrySet().asScala.head.getValue.getAsJsonObject
+      .get("title").getAsString
+  }
+
+  private def getPictureData0(_title: String, errorCallback: () => PictureData): PictureData = {
+    val title = resolveRedirects(_title)
+    val query = entryPoint +
+      s"?format=json&action=query&titles=${title.replace(" ", "_")}&prop=images|links&plnamespace=0&pllimit=450"
     val _json = jparser.parse(extract(query))
     if(!_json.isJsonObject)
       return errorCallback()
@@ -98,9 +110,37 @@ object WikipediaEndpoint {
           .map(_.getAsJsonObject.getAsJsonPrimitive("title").getAsString
           .replaceAll("[^A-Za-z ]|\\(.+\\)", "").trim.replace(" ", "*"))
           .filter(_ != "")
-        SomePictureData(name, bImage, links.toSeq, imageLoc)
+        SomePictureData(name, bImage, links.toSeq, imageLoc, getArticleText(title.replace(" ", "_")))
       }
     }
+  }
+
+  val paragraph = """<p>(.+)</p>""".r
+  val citation = """<a href="#cite_note-.+"><span>\[</span>.+<span>\]</span></a>""".r
+  val tag = """<(.+)(?: .*)?>(.*)</\1>""".r
+  val empty = """<(.+)/\s*>""".r
+  def getArticleText(title: String): Seq[String] = {
+    articleCache.getOrElse(title, {
+    val query = entryPoint +
+      s"?action=parse&format=json&page=$title&prop=text&redirect"
+    val json = jparser.parse(extract(query))
+    val raw = json.getAsJsonObject.getAsJsonObject("parse").getAsJsonObject("text").get("*").getAsString
+    val text = paragraph.findAllMatchIn(raw).map(_.group(1))
+    val clean = text.map(s => empty.replaceAllIn(tag.replaceAllIn(citation.replaceAllIn(s, ""), "$2"), "").replaceAll("\\s", " ")).filter(_ != "")
+    val res = clean.map(StringEscapeUtils.unescapeHtml4).toSeq
+    articleCache += (title -> res)
+    res
+    })
+  }
+
+  private val sectionBlacklist = Set("see also", "references", "sources", "further reading", "external links")
+  def getSections(title: String, count: Int = 3) = {
+    val query = entryPoint + s"?action=parse&format=json&page=$title&prop=sections"
+    val json = jparser.parse(extract(query))
+    val sections =
+      json.getAsJsonObject.getAsJsonObject("parse").getAsJsonArray("sections")
+      .iterator().asScala.toSeq.map(_.getAsJsonObject).filterNot(o => sectionBlacklist(o.get("line").getAsString.toLowerCase))
+    rand.shuffle(sections).take(count).map(_.get("index").getAsInt)
   }
 
   def getPictureData(title: String): PictureData = {

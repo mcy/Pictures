@@ -1,7 +1,8 @@
 package com.xorinc.pictures
 
 import java.awt.event._
-import java.awt.{GridBagConstraints, GridBagLayout}
+import java.awt.{Desktop, GridBagConstraints, GridBagLayout}
+import java.net.{URL, URI}
 import javax.swing.{JLabel, JCheckBox, JPanel}
 import javax.swing.border.Border
 
@@ -176,4 +177,15 @@ object GuiUtils {
     }
     (box, pan)
   }
+
+  def desktopSupported = Desktop.isDesktopSupported && Desktop.getDesktop.isSupported(Desktop.Action.BROWSE)
+
+  def openWebpage(uri: URI) =
+    if(desktopSupported) {
+      Desktop.getDesktop.browse(uri)
+    }
+
+  def openWebpage(url: URL): Unit =
+    this.openWebpage(url.toURI)
+
 }

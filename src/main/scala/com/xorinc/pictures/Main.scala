@@ -51,10 +51,12 @@ object Main {
         updateArrows()
       }
 
-      def now() = {
+      def refresh() = {
         if(currentIndex >= 0)
           makeNewImage(history(currentIndex))
       }
+
+      def now = history(currentIndex)
     }
 
     import JFrame._
@@ -71,11 +73,11 @@ object Main {
     val metrics = console.getFontMetrics(console.getFont)
 
     add (
-      new JScrollPane (
+      console/*new JScrollPane (
         console,
         ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
         ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED
-      ),
+      )*/,
       BorderLayout.CENTER
     )
 
@@ -85,21 +87,7 @@ object Main {
       controls,
       BorderLayout.SOUTH
     )
-
-    val reloadButton = new JButton("Redraw")
-    reloadButton act {
-      History.now()
-    }
-
-    controls.add (
-      reloadButton,
-      Layout(
-        x = 6,
-        y = 0,
-        anchor = East
-      )
-    )
-
+    
     val newButton = new JButton("Random Page")
     newButton act {
       makeNewImage(WikipediaEndpoint.generateRandomPageData())
@@ -199,16 +187,18 @@ object Main {
 
     val (useRandom, randomPan) = checkbox("  Random image:")
 
-    controls.add (
+    //disabled because the images are not sent in order anyways.
+    useRandom.setSelected(true)
+    /*controls.add (
       randomPan,
       Layout(
         x = 3,
         y = 0,
         anchor = West
       )
-    )
+    )*/
 
-    val (invert, invertPan) = checkboxAct(" Invert colors:") { box =>
+    val (invert, invertPan) = checkboxAct("  Invert colors:") { box =>
       if(box.isSelected){
         console.setBackground(Color.BLACK)
         console.setForeground(Color.WHITE)
@@ -216,7 +206,7 @@ object Main {
         console.setBackground(Color.WHITE)
         console.setForeground(Color.BLACK)
       }
-      History.now()
+      History.refresh()
     }
 
     controls.add (
@@ -229,7 +219,7 @@ object Main {
     )
 
     val (overlay, overlayPan) = checkboxAct(" Disable article overlay:") { box =>
-      History.now()
+      History.refresh()
     }
 
     controls.add (
@@ -241,22 +231,42 @@ object Main {
       )
     )
 
+    val reloadButton = new JButton("Redraw")
+    reloadButton act {
+      History.refresh()
+    }
+
+    controls.add (
+      reloadButton,
+      Layout(
+        x = 6,
+        y = 0,
+        anchor = East
+      )
+    )
+    
+    if(desktopSupported) {
+      val openButton = new JButton("Open in Browser")
+      openButton act {
+        if(History.now != TitlePage)
+        openWebpage(articleURL(History.now.name))
+      }
+      controls.add(
+        openButton,
+        Layout(
+          x = 7,
+          y = 0,
+          anchor = East
+        )
+      )
+    }
     //this.setSize(screenWidth, screenHeight - 24)
     setResizable(false)
     pack()
     setLocationRelativeTo(null)
     setVisible(true)
 
-    History(
-      SomePictureData(
-        "Ascii Wikipedia Browser",
-        ImageIO.read(this.getClass.getResourceAsStream("/titlecard.png")),
-        Nil,
-        "",
-        Nil
-      )
-    )
-
+    History(TitlePage)
 
     def consoleSize = (console.getColumns, console.getRows)
 
@@ -270,7 +280,7 @@ object Main {
       console.setText(text)
     }
 
-    def init() = History.now()
+    def init() = History.refresh()
   }
 
   def main(args: Array[String]): Unit = {

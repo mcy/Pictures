@@ -30,6 +30,14 @@ object WikipediaEndpoint {
   sealed trait PictureData
   case class SomePictureData(name: String, img: BufferedImage, links: Seq[String], imgName: String, article: Seq[String]) extends PictureData
   object NoPictureData extends PictureData
+  object TitlePage extends SomePictureData(
+    "Ascii Wikipedia Browser",
+    ImageIO.read(this.getClass.getResourceAsStream("/titlecard.png")),
+    Nil,
+    "",
+    Nil
+  )
+
 
   private def extract(query: String) = {
     val url = new URL(query)
@@ -41,7 +49,7 @@ object WikipediaEndpoint {
   }
 
   def randomPage() = {
-    val query = entryPoint + "?format=json&action=query&list=random&rnlimit=1&rnnamespace=0"
+    val query = entryPoint + "?format=json&action=query&list=random&rnlimit=10&rnnamespace=0"
     val json = jparser.parse(extract(query)).getAsJsonObject
     val page =
       json.getAsJsonObject("query").getAsJsonArray("random").get(0).getAsJsonObject
@@ -117,16 +125,17 @@ object WikipediaEndpoint {
 
   val paragraph = """<p>(.+)</p>""".r
   //val citation = """<a href="#cite_note-.+"><span>\[</span>.+<span>\]</span></a>""".r
-  val tag = """<[/]?\w+( .*)?>|<.+\s*/\s*>""".r
+  val tag = """\<.*?\>""".r
   def getArticleText(title: String): Seq[String] = {
     articleCache.getOrElse(title, {
     val query = entryPoint +
       s"?action=parse&format=json&page=$title&prop=text&redirect"
     val json = jparser.parse(extract(query))
     val raw = json.getAsJsonObject.getAsJsonObject("parse").getAsJsonObject("text").get("*").getAsString
-    val text = paragraph.findAllMatchIn(raw).map(_.group(1))
-    val clean = text.map(s => tag.replaceAllIn(s, "").replaceAll("\\s", " ")).filter(_ != "")
+    val text = paragraph.findAllMatchIn(raw).map(_.group(1))//.toSeq
+    val clean = text.map(s => tag.replaceAllIn(s, "").replaceAll("\\s+", " ")).filter(_.nonEmpty)
     val res = clean.map(StringEscapeUtils.unescapeHtml4).toSeq
+    //println(text.zip(clean).map(t => t._1 + "\n" + t._2).mkString("\n\n"))
     articleCache += (title -> res)
     res
     })
@@ -154,4 +163,7 @@ object WikipediaEndpoint {
       generateRandomPageData()
     }).asInstanceOf[SomePictureData]
   }
+
+  val wikiURLPrefix = "http://en.wikipedia.org/wiki/"
+  def articleURL(title: String) = new URL(wikiURLPrefix + title.replace(' ', '_'))
 }

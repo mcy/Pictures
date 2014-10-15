@@ -35,11 +35,26 @@ object Ascii {
   }
 
   def scaleToFit(img: BufferedImage, canvas: (Int, Int)) = {
-    val scale = Math.min(canvas._1.toDouble / img.getWidth, canvas._2.toDouble * aspectRatio / img.getHeight)
-    resizeImage(img, (scale * aspectRatio, scale))
+
+    val baseScale = (canvas._1.toDouble / img.getWidth).min(aspectRatio * canvas._2.toDouble / img.getHeight)
+    val scale =
+      if(img.getHeight.toDouble / img.getWidth < aspectRatio * canvas._2.toDouble / canvas._1)
+        (baseScale, baseScale / aspectRatio)
+      else
+        (baseScale * aspectRatio, baseScale)
+    rescaleImage(img, scale)
   }
 
-  def resizeImage(img: BufferedImage, scale: (Double, Double)) = {
+  def resizeImage(img: BufferedImage, size: (Int, Int)) = {
+    val itype = if(img.getType == 0) BufferedImage.TYPE_INT_ARGB else img.getType
+    val resized = new BufferedImage(size._1, size._2, itype)
+    val gfx = resized.createGraphics()
+    gfx.drawImage(img, 0, 0, resized.getWidth, resized.getHeight, null)
+    gfx.dispose()
+    resized
+  }
+
+  def rescaleImage(img: BufferedImage, scale: (Double, Double)) = {
     val itype = if(img.getType == 0) BufferedImage.TYPE_INT_ARGB else img.getType
     val resized = new BufferedImage((img.getWidth * scale._1 + 0.5).toInt, (img.getHeight * scale._2 + 0.5).toInt, itype)
     val gfx = resized.createGraphics()
@@ -81,8 +96,10 @@ object Ascii {
     rand.shuffle(res).take(5)
   }
 
-  val maxRegionSize = 500
-  val minRegionSize = 100
+  val maxRegionSize = 1500
+  val minRegionSize = 150
+  val outerLeftChar  = '∎'
+  val outerRightChar = '∎'
 
   def insertArticle(image: String, text: Seq[String]): String = {
     import collection.mutable
@@ -96,6 +113,7 @@ object Ascii {
     //println(" " + (width, height))
     val shuffled = rand.shuffle(text).iterator
     var countdown = 7 //total regions!
+    def setChar(c: Char, x: Int, y: Int) = buf.setCharAt((x - 1) + y * (width+1), c)
     while(countdown > 0 && shuffled.hasNext) { breakable {
       val locW = rand.nextInt(width)
       val locH = rand.nextInt(height)
@@ -106,7 +124,7 @@ object Ascii {
         slice.map(_._2).toSet
       }
       //println(allowedColors)
-      val region = {
+      val rawregion = {
 
         val set = mutable.Set.empty[(Int, Int)]
         val pixels = mutable.Stack[(Int, Int)]()
@@ -138,8 +156,29 @@ object Ascii {
             y1 += 1
           }
         }
-        set.toSeq.sortBy(t => t._1 + t._2 * width)
+        set//.toSeq
       }
+      val splitByY = rawregion.groupBy(_._2).values.toSeq
+      val regionUnflattened = splitByY.map({ s =>
+        val sorted = s.toSeq.sortBy(_._1)
+        val min = sorted.head
+        val max = sorted.last
+        val zipped = sorted.zip(sorted.tail)
+        val seq =
+          for(((x1, y), (x2, _)) <- zipped)
+            yield
+              if(Math.abs(x1 - x2) < 3){
+                for(x <- x1 until x2)
+                  yield (x, y)
+              }
+              else
+                (x1, y) :: Nil
+        seq.flatten
+
+      }).filter(_.size > 7)
+
+      val region = regionUnflattened.flatten.sortBy(t => t._1 + t._2 * width)
+
       //val start = rand.nextInt(region.maxBy(_._2)._2 - length)
       //val modRegion = region.filter(_._2 > start)
       if (minRegionSize > region.size || region.size > maxRegionSize) break()
@@ -155,14 +194,43 @@ object Ascii {
           s = " " + shuffled.next()
         }
         val char = s(index - offset)
+        //print((index-offset, char))
         val loc = region(index) //modRegion(index)
-        buf.setCharAt(loc._1 + loc._2 * width, char)
+        setChar(char, loc._1, loc._2)
       }
+
+      for(line <- regionUnflattened){
+        for(segment <- {
+          def newSeq = mutable.ArrayBuffer.empty[(Int, Int)]
+          val segments = mutable.ArrayBuffer.empty[Seq[(Int, Int)]]
+          var seg: mutable.ArrayBuffer[(Int, Int)] = null
+          var last: (Int, Int) = null
+          for(loc <- line){
+            if(seg eq null){
+              seg = newSeq
+            } else if(loc._1 - last._1 > 1){
+              segments += seg
+              seg = newSeq
+            }
+            seg += loc
+            last = loc
+          }
+          segments
+        }) {
+          val min = segment.head
+          val max = segment.last
+          if (min._1 > 0)
+            setChar(outerLeftChar, min._1 - 1, min._2)
+          if (max._1 < width - 1)
+            setChar(outerRightChar, max._1 + 1, max._2)
+        }
+      }
+      //println
       usedPoints ++ region
       countdown -= 1
       /*println({
         val set = region.toSet
-        Array.tabulate(height, width)((x, y) => if(set((x, y))) "*" else " ").map(_.mkString).mkString("\n")
+        Array.tabulate(height, width)((y, x) => if(set((y, x))) "*" else " ").map(_.mkString).mkString("\n")
       })*/
     }}
 

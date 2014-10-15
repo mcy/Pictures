@@ -116,9 +116,8 @@ object WikipediaEndpoint {
   }
 
   val paragraph = """<p>(.+)</p>""".r
-  val citation = """<a href="#cite_note-.+"><span>\[</span>.+<span>\]</span></a>""".r
-  val tag = """<(.+)(?: .*)?>(.*)</\1>""".r
-  val empty = """<(.+)/\s*>""".r
+  //val citation = """<a href="#cite_note-.+"><span>\[</span>.+<span>\]</span></a>""".r
+  val tag = """<[/]?\w+( .*)?>|<.+\s*/\s*>""".r
   def getArticleText(title: String): Seq[String] = {
     articleCache.getOrElse(title, {
     val query = entryPoint +
@@ -126,7 +125,7 @@ object WikipediaEndpoint {
     val json = jparser.parse(extract(query))
     val raw = json.getAsJsonObject.getAsJsonObject("parse").getAsJsonObject("text").get("*").getAsString
     val text = paragraph.findAllMatchIn(raw).map(_.group(1))
-    val clean = text.map(s => empty.replaceAllIn(tag.replaceAllIn(citation.replaceAllIn(s, ""), "$2"), "").replaceAll("\\s", " ")).filter(_ != "")
+    val clean = text.map(s => tag.replaceAllIn(s, "").replaceAll("\\s", " ")).filter(_ != "")
     val res = clean.map(StringEscapeUtils.unescapeHtml4).toSeq
     articleCache += (title -> res)
     res

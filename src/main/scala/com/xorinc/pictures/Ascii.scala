@@ -25,6 +25,7 @@ object Ascii {
   }
 
   private val chars = colors.zipWithIndex.map(t => (t._1._2, t._2)).toMap
+  private val char2val = colors.map(_.swap).toMap
 
   def center(s: String, canvas: (Int, Int)): String = {
     val lines = s.split("\n")
@@ -34,10 +35,8 @@ object Ascii {
   }
 
   def scaleToFit(img: BufferedImage, canvas: (Int, Int)) = {
-
     val scale = Math.min(canvas._1.toDouble / img.getWidth, canvas._2.toDouble * aspectRatio / img.getHeight)
     resizeImage(img, (scale * aspectRatio, scale))
-
   }
 
   def resizeImage(img: BufferedImage, scale: (Double, Double)) = {
@@ -82,28 +81,31 @@ object Ascii {
     rand.shuffle(res).take(5)
   }
 
+  val maxRegionSize = 500
+  val minRegionSize = 100
+
   def insertArticle(image: String, text: Seq[String]): String = {
     import collection.mutable
+    import util.control.Breaks._
     if(text.isEmpty) return image
     val usedPoints = mutable.Set.empty[(Int, Int)]
     val buf = new StringBuilder(image)
     val lines = image.split("\n")
     val width = lines(0).length
     val height = lines.length
-
-    for(s <- processArticle(text)) {
-      val (locW, locH) = {
-        val w = rand.nextInt(width)
-        val h = rand.nextInt(height)
-        (w, h)
-      }
+    //println(" " + (width, height))
+    val shuffled = rand.shuffle(text).iterator
+    var countdown = 7 //total regions!
+    while(countdown > 0 && shuffled.hasNext) { breakable {
+      val locW = rand.nextInt(width)
+      val locH = rand.nextInt(height)
+      println((locW, locH))
       val c = lines(locH)(locW)
       val allowedColors = {
-        val index = chars(c)
-        val slice = colors.slice(Math.max(0, index - 6), Math.min(colors.length - 1, index + 6))
+        val slice = colors.filter(t => (t._1 - char2val(c)).abs < 0.05D)
         slice.map(_._2).toSet
       }
-
+      //println(allowedColors)
       val region = {
 
         val set = mutable.Set.empty[(Int, Int)]
@@ -125,7 +127,7 @@ object Ascii {
           var spanLeft, spanRight = false
           while (y1 < height && old(x, y1)) {
             add(x, y1)
-            if (x > 0 && spanLeft != old(x, y1)) {
+            if (x > 0 && spanLeft != old(x - 1, y1)) {
               if (old(x - 1, y1)) push(x - 1, y1)
               spanLeft = !spanLeft
             }
@@ -138,15 +140,32 @@ object Ascii {
         }
         set.toSeq.sortBy(t => t._1 + t._2 * width)
       }
-      val length = Math.min(region.size, s.length)
-
-      for (index <- 0 until length) {
-        val char = s(index)
-        val loc = region(index)
+      //val start = rand.nextInt(region.maxBy(_._2)._2 - length)
+      //val modRegion = region.filter(_._2 > start)
+      if (minRegionSize > region.size || region.size > maxRegionSize) break()
+      var offset = 0
+      if (!shuffled.hasNext) break()
+      var s = shuffled.next()
+      for (index <- 0 until region.size) {
+        //println((s, s.length))
+        if (index - offset > s.length - 1) {
+          if (!shuffled.hasNext)
+            break()
+          offset += s.length
+          s = " " + shuffled.next()
+        }
+        val char = s(index - offset)
+        val loc = region(index) //modRegion(index)
         buf.setCharAt(loc._1 + loc._2 * width, char)
       }
       usedPoints ++ region
-    }
+      countdown -= 1
+      /*println({
+        val set = region.toSet
+        Array.tabulate(height, width)((x, y) => if(set((x, y))) "*" else " ").map(_.mkString).mkString("\n")
+      })*/
+    }}
+
     for(i <- 1 until height){
       buf.setCharAt(i * (width+1) - 1, '\n')
     }
@@ -155,7 +174,7 @@ object Ascii {
 
   def toLightnessMap(image: BufferedImage): Array[Array[Double]] = {
     val result = Array.fill(image.getWidth)(Array.fill(image.getHeight)(0.0))
-    for(x <- 0 until image.getWidth; y <- 0 until image.getHeight()){
+    for(x <- 0 until image.getWidth; y <- 0 until image.getHeight){
       result(x)(y) = lightness(image.getRGB(x, y))
     }
     result

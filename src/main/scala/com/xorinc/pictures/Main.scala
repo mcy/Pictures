@@ -86,6 +86,20 @@ object Main {
       BorderLayout.SOUTH
     )
 
+    val reloadButton = new JButton("Redraw")
+    reloadButton act {
+      History.now()
+    }
+
+    controls.add (
+      reloadButton,
+      Layout(
+        x = 6,
+        y = 0,
+        anchor = East
+      )
+    )
+
     val newButton = new JButton("Random Page")
     newButton act {
       makeNewImage(WikipediaEndpoint.generateRandomPageData())

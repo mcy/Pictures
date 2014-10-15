@@ -24,7 +24,7 @@ object Ascii {
     (arr.map(t => (t._1 / max, t._2)), asp)
   }
 
-  private val chars = colors.zipWithIndex.map(t => (t._1._2, t._2)).toMap
+  //private val chars = colors.zipWithIndex.map(t => (t._1._2, t._2)).toMap
   private val char2val = colors.map(_.swap).toMap
 
   def center(s: String, canvas: (Int, Int)): String = {
@@ -80,6 +80,60 @@ object Ascii {
     }
   }
 
+  def distance(a: String, b: String): Double = {
+    a.zip(b.toCharArray).map{ t =>
+      (char2val(t._1) - char2val(t._2)).abs
+    }.sum / a.length
+  }
+
+  def sprinkleKeywords(image: String, words: Seq[String]): String = {
+    import collection.mutable
+    import util.control.Breaks._
+    if(words.isEmpty) return image
+    val buf = new StringBuilder(image)
+    val usedPoints = mutable.Set.empty[(Int, Int)]
+    val lines = image.split("\n")
+    val width = lines(0).length
+    val height = lines.length
+    var hardCountdown = 50
+
+    def setString(s: String, x: Int, y: Int) = {
+      //println((width, height))
+      //println((x, y))
+      //println(buf.length)
+      val loc = (x - 1) + y * (width + 1)
+      //println(loc)
+      if(0 <= loc && loc < buf.length)
+        buf.replace(loc, loc + s.length, s)
+    }
+
+    for((w, i) <- words.zipWithIndex){
+      println((w, i))
+        for(_ <- 1 to (words.size - i) * 15) {
+          var best = (Double.MaxValue, (-1, -1))
+          while (hardCountdown > 0){
+
+            val locW = rand.nextInt(width - w.length - 2) + 1
+            val locH = rand.nextInt(height)
+
+            val region = lines(locH).substring(locW, locW + w.length)
+
+            if((best._2._1 to best._2._1 + w.length).map((_, best._2._2)).exists(usedPoints(_))) {
+              val dist = distance(w, region)
+              if (dist < best._1) {
+                best = (dist, (locW, locH))
+              }
+            }
+            hardCountdown -= 1
+          }
+          hardCountdown = 50
+          setString(w, best._2._1, best._2._2)
+          usedPoints ++= (best._2._1 to best._2._1 + w.length).map((_, best._2._2))
+        }
+    }
+    buf.toString()
+  }
+
   def processArticle(raw: Seq[String]): Seq[String] = {
     import collection.mutable
     //println(raw.mkString("\n"))
@@ -112,20 +166,29 @@ object Ascii {
     val height = lines.length
     //println(" " + (width, height))
     val shuffled = rand.shuffle(text).iterator
+    var hardCountdown = 50
     var countdown = 7 //total regions!
-    def setChar(c: Char, x: Int, y: Int) = buf.setCharAt((x - 1) + y * (width+1), c)
-    while(countdown > 0 && shuffled.hasNext) { breakable {
+
+    def setChar(c: Char, x: Int, y: Int) = {
+      val loc = (x - 1) + y * (width+1)
+      if(0 <= loc && loc < buf.length)
+        buf.setCharAt(loc, c)
+    }
+
+    while(hardCountdown > 0 && countdown > 0 && shuffled.hasNext) { breakable {
+      hardCountdown -= 1
       val locW = rand.nextInt(width)
       val locH = rand.nextInt(height)
       //println((locW, locH))
       val c = lines(locH)(locW)
+      if(!char2val.contains(c))
+        break()
       val allowedColors = {
         val slice = colors.filter(t => (t._1 - char2val(c)).abs < 0.05D)
         slice.map(_._2).toSet
       }
       //println(allowedColors)
       val rawregion = {
-
         val set = mutable.Set.empty[(Int, Int)]
         val pixels = mutable.Stack[(Int, Int)]()
 
@@ -138,6 +201,7 @@ object Ascii {
         push(locW, locH)
 
         while (pixels.nonEmpty) {
+          //println(pixels)
           val (x, y) = next
           var y1 = y
           while (y1 >= 0 && old(x, y1)) y1 -= 1
@@ -161,22 +225,20 @@ object Ascii {
       val splitByY = rawregion.groupBy(_._2).values.toSeq
       val regionUnflattened = splitByY.map({ s =>
         val sorted = s.toSeq.sortBy(_._1)
-        val min = sorted.head
-        val max = sorted.last
-        val zipped = sorted.zip(sorted.tail)
+        //val min = sorted.head
+        //val max = sorted.last
+        val zipped = sorted.zip(sorted.tail).toIndexedSeq
         val seq =
           for(((x1, y), (x2, _)) <- zipped)
             yield
-              if(Math.abs(x1 - x2) < 3){
+              if(Math.abs(x1 - x2) < 6){
                 for(x <- x1 until x2)
                   yield (x, y)
               }
               else
                 (x1, y) :: Nil
-        seq.flatten
-
+        seq.flatten//.toSeq
       }).filter(_.size > 7)
-
       val region = regionUnflattened.flatten.sortBy(t => t._1 + t._2 * width)
 
       //val start = rand.nextInt(region.maxBy(_._2)._2 - length)
@@ -199,32 +261,32 @@ object Ascii {
         setChar(char, loc._1, loc._2)
       }
 
-      for(line <- regionUnflattened){
+      //println(regionUnflattened.mkString("\n"))
+
+      /*for(line <- regionUnflattened){
         for(segment <- {
           def newSeq = mutable.ArrayBuffer.empty[(Int, Int)]
           val segments = mutable.ArrayBuffer.empty[Seq[(Int, Int)]]
-          var seg: mutable.ArrayBuffer[(Int, Int)] = null
-          var last: (Int, Int) = null
-          for(loc <- line){
-            if(seg eq null){
-              seg = newSeq
-            } else if(loc._1 - last._1 > 1){
+          var seg: mutable.ArrayBuffer[(Int, Int)] = newSeq
+          for(loc <- line.tail){
+            if(seg.length > 0 && loc._1 - seg.last._1 > 1){
+              //seg += loc
               segments += seg
               seg = newSeq
-            }
-            seg += loc
-            last = loc
+            } else
+              seg += loc
           }
-          segments
+          segments += seg
+          segments.filter(_.nonEmpty)
         }) {
           val min = segment.head
           val max = segment.last
           if (min._1 > 0)
-            setChar(outerLeftChar, min._1 - 1, min._2)
+            setChar(outerLeftChar, min._1 - 2, min._2)
           if (max._1 < width - 1)
             setChar(outerRightChar, max._1 + 1, max._2)
         }
-      }
+      }*/
       //println
       usedPoints ++ region
       countdown -= 1
@@ -274,7 +336,7 @@ object Ascii {
     chars.map(_.mkString("")).mkString("\n")
   }
 
-  private def pixel(image: BufferedImage, x: Int, y: Double) = {
+  /*private def pixel(image: BufferedImage, x: Int, y: Double) = {
     val nextInt = (y + 0.5).toInt
     val upper = toTuple(image.getRGB(x, nextInt))
     val lower = toTuple(image.getRGB(x, nextInt + 1))
@@ -285,7 +347,7 @@ object Ascii {
       (upper._2 * upperLength + lower._2 * lowerLength)./(2).toInt,
       (upper._3 * upperLength + lower._3 * lowerLength)./(2).toInt
     )
-  }
+  }*/
 
   def getChar(color: Int): Char = getChar(color / 255.0)
   def getChar(color: Double) = {

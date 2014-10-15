@@ -28,7 +28,15 @@ object WikipediaEndpoint {
   private val imageExtensionWhitelist = Set(".png", ".jpg", ".jpeg")
 
   sealed trait PictureData
-  case class SomePictureData(name: String, img: BufferedImage, links: Seq[String], imgName: String, article: Seq[String]) extends PictureData
+  case class SomePictureData (
+    name: String,
+    img: BufferedImage,
+    links: Seq[String],
+    imgName: String,
+    article: Seq[String]
+  ) extends PictureData {
+    val wordFreq = WordUtils.wordsByFreq(article.mkString(" "))
+  }
   object NoPictureData extends PictureData
   object TitlePage extends SomePictureData(
     "Ascii Wikipedia Browser",

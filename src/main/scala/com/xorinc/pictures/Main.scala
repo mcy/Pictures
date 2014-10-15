@@ -81,7 +81,7 @@ object Main {
       BorderLayout.CENTER
     )
 
-    val controls = new JPanel(new GridBagLayout)
+    val controls = new JPanel
 
     add (
       controls,
@@ -93,14 +93,7 @@ object Main {
       makeNewImage(WikipediaEndpoint.generateRandomPageData())
     }
 
-    controls.add (
-      newButton,
-      Layout(
-        x = 0,
-        y = 0,
-        anchor = East
-      )
-    )
+    controls.add(newButton)
 
     controls.add (
       panel (BorderFactory.createEtchedBorder(EtchedBorder.LOWERED)) { p =>
@@ -119,34 +112,16 @@ object Main {
           if(c == '\n')
             query()
         }
-
-        p.add (
-          articleField,
-          Layout(
-            x = 0,
-            y = 0
-          )
-        )
+        p.add(articleField)
 
         val articleButton = new JButton("Fetch Page")
         articleButton act {
           query()
         }
-        p.add (
-          articleButton,
-          Layout(
-            x = 1,
-            y = 0
-          )
-        )
+        p.add(articleButton)
 
 
-      },
-      Layout(
-        x = 1,
-        y = 0,
-        anchor = West
-      )
+      }
     )
 
     val prev = new JButton("<-")
@@ -158,31 +133,14 @@ object Main {
         prev act {
           History.back()
         }
-        p.add(
-          prev,
-          Layout(
-            x = 0,
-            y = 0
-          )
-        )
+        p.add(prev)
 
         next.setEnabled(false)
         next act {
           History.forward()
         }
-        p.add(
-          next,
-          Layout(
-            x = 1,
-            y = 0
-          )
-        )
-      },
-      Layout(
-        x = 2,
-        y = 0,
-        anchor = West
-      )
+        p.add(next)
+      }
     )
 
     val (useRandom, randomPan) = checkbox("  Random image:")
@@ -208,63 +166,43 @@ object Main {
       }
       History.refresh()
     }
-
-    controls.add (
-      invertPan,
-      Layout(
-        x = 4,
-        y = 0,
-        anchor = West
-      )
-    )
+    controls.add(invertPan)
 
     val (overlay, overlayPan) = checkboxAct(" Disable article overlay:") { box =>
       History.refresh()
     }
 
-    controls.add (
-      overlayPan,
-      Layout(
-        x = 5,
-        y = 0,
-        anchor = West
-      )
-    )
+    controls.add(overlayPan)
 
     val reloadButton = new JButton("Redraw")
     reloadButton act {
       History.refresh()
     }
 
-    controls.add (
-      reloadButton,
-      Layout(
-        x = 6,
-        y = 0,
-        anchor = East
-      )
-    )
-    
-    if(desktopSupported) {
-      val openButton = new JButton("Open in Browser")
+    controls.add(reloadButton)
+
+    val openButton =
+      if(desktopSupported)
+        Some(new JButton("Open in Browser"))
+      else None
+
+    openButton map { openButton =>
       openButton act {
-        if(History.now != TitlePage)
-        openWebpage(articleURL(History.now.name))
+        val title =
+          if(History.now == TitlePage)
+            "Main Page"
+          else
+            History.now.name
+        openWebpage(articleURL(title))
       }
-      controls.add(
-        openButton,
-        Layout(
-          x = 7,
-          y = 0,
-          anchor = East
-        )
-      )
+      controls.add(openButton)
     }
+
     //this.setSize(screenWidth, screenHeight - 24)
     setResizable(false)
     pack()
     setLocationRelativeTo(null)
-    setVisible(true)
+    //setVisible(true)
 
     History(TitlePage)
 
@@ -275,12 +213,27 @@ object Main {
       val picture = Ascii.toAscii(img)
       setTitle(data.name)
       History(data)
-      val text = Ascii.center(if(overlay.isSelected) picture else Ascii.insertArticle(picture, data.article), consoleSize)
+      val text = Ascii.center(
+        if(overlay.isSelected)
+          picture
+        else
+          Ascii.insertArticle(
+            Ascii.sprinkleKeywords(
+              picture,
+              data.wordFreq.take(10).map(_._1)
+            ),
+            data.article
+          ),
+        consoleSize
+      )
       //println(data.article)
       console.setText(text)
     }
 
-    def init() = History.refresh()
+    def init() = {
+      History.refresh()
+      this.setVisible(true)
+    }
   }
 
   def main(args: Array[String]): Unit = {

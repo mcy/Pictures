@@ -99,7 +99,7 @@ object Ascii {
     while(countdown > 0 && shuffled.hasNext) { breakable {
       val locW = rand.nextInt(width)
       val locH = rand.nextInt(height)
-      println((locW, locH))
+      //println((locW, locH))
       val c = lines(locH)(locW)
       val allowedColors = {
         val slice = colors.filter(t => (t._1 - char2val(c)).abs < 0.05D)

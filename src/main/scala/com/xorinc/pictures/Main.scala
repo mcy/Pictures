@@ -80,6 +80,8 @@ object Main {
       )*/,
       BorderLayout.CENTER
     )
+    console.setBackground(Color.BLACK)
+    console.setForeground(Color.WHITE)
 
     val controls = new JPanel
 
@@ -158,11 +160,11 @@ object Main {
 
     val (invert, invertPan) = checkboxAct("  Invert colors:") { box =>
       if(box.isSelected){
-        console.setBackground(Color.BLACK)
-        console.setForeground(Color.WHITE)
-      } else {
         console.setBackground(Color.WHITE)
         console.setForeground(Color.BLACK)
+      } else {
+        console.setBackground(Color.BLACK)
+        console.setForeground(Color.WHITE)
       }
       History.refresh()
     }

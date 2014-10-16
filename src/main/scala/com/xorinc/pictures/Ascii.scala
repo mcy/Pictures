@@ -81,14 +81,19 @@ object Ascii {
   }
 
   def distance(a: String, b: String): Double = {
-    a.zip(b.toCharArray).map{ t =>
-      (char2val(t._1) - char2val(t._2)).abs
-    }.sum / a.length
+    val zip = a.zip(b.toCharArray).map{ t =>
+      if(!char2val.contains(t._1) || !char2val.contains(t._1))
+        Double.MaxValue
+      else
+        (char2val(t._1) - char2val(t._2)).abs
+    }//.sum /// a.length
+    //println(zip.mkString(", "))
+    zip.sum / a.length
   }
 
+  val distanceCutoff = 0.15D //magic number!
   def sprinkleKeywords(image: String, words: Seq[String]): String = {
     import collection.mutable
-    import util.control.Breaks._
     if(words.isEmpty) return image
     val buf = new StringBuilder(image)
     val usedPoints = mutable.Set.empty[(Int, Int)]
@@ -108,7 +113,7 @@ object Ascii {
     }
 
     for((w, i) <- words.zipWithIndex){
-      println((w, i))
+      //println((w, i))
         for(_ <- 1 to (words.size - i) * 15) {
           var best = (Double.MaxValue, (-1, -1))
           while (hardCountdown > 0){
@@ -118,8 +123,9 @@ object Ascii {
 
             val region = lines(locH).substring(locW, locW + w.length)
 
-            if((best._2._1 to best._2._1 + w.length).map((_, best._2._2)).exists(usedPoints(_))) {
+            if(!(best._2._1 to best._2._1 + w.length).map((_, best._2._2)).exists(usedPoints(_))) {
               val dist = distance(w, region)
+              //println(dist)
               if (dist < best._1) {
                 best = (dist, (locW, locH))
               }
@@ -127,8 +133,11 @@ object Ascii {
             hardCountdown -= 1
           }
           hardCountdown = 50
-          setString(w, best._2._1, best._2._2)
-          usedPoints ++= (best._2._1 to best._2._1 + w.length).map((_, best._2._2))
+          //println(best._1)
+          if(best._1 <= distanceCutoff) {
+            setString(w, best._2._1, best._2._2)
+            usedPoints ++= (best._2._1 to best._2._1 + w.length).map((_, best._2._2))
+          }
         }
     }
     buf.toString()
@@ -181,7 +190,7 @@ object Ascii {
       val locH = rand.nextInt(height)
       //println((locW, locH))
       val c = lines(locH)(locW)
-      if(!char2val.contains(c))
+      if(!char2val.contains(c) || char2val(c) < 0.15)
         break()
       val allowedColors = {
         val slice = colors.filter(t => (t._1 - char2val(c)).abs < 0.05D)
@@ -325,8 +334,9 @@ object Ascii {
               (
                 (upper._1 * upperLength + lower._1 * lowerLength)./(2).toInt,
                 (upper._2 * upperLength + lower._2 * lowerLength)./(2).toInt,
-                (upper._3 * upperLength + lower._3 * lowerLength)./(2).toInt
-                )
+                (upper._3 * upperLength + lower._3 * lowerLength)./(2).toInt,
+                (upper._4 * upperLength + lower._4 * lowerLength)./(2).toInt
+              )
             })
             if(invert)
               getChar(hsl)
@@ -351,32 +361,37 @@ object Ascii {
 
   def getChar(color: Int): Char = getChar(color / 255.0)
   def getChar(color: Double) = {
-    def next(d: Double, l: Array[(Double, Char)]): Char = {
-      //println(l.mkString("[", ",", "]"))
-      val mid = (l.length - 1)/2
-      if(l(mid)._1 == d) l(mid)._2
-      else if(l.length == 2){
-        val (d1, c1) = l(0)
-        val (d2, c2) = l(1)
-        if(d - d1 < d2 - d)
-          c1
-        else c2
-      } else if (l(mid)._1 < d)
-        next(d, l.takeRight(l.length/2))
-      else
-        next(d, l.take(l.length/2))
+    if(color.isNaN) ' '
+    else {
+      def next(d: Double, l: Array[(Double, Char)]): Char = {
+        //println(l.mkString("[", ",", "]"))
+        val mid = (l.length - 1) / 2
+        if (l(mid)._1 == d) l(mid)._2
+        else if (l.length == 2) {
+          val (d1, c1) = l(0)
+          val (d2, c2) = l(1)
+          if (d - d1 < d2 - d)
+            c1
+          else c2
+        } else if (l(mid)._1 < d)
+          next(d, l.takeRight(l.length / 2))
+        else
+          next(d, l.take(l.length / 2))
+      }
+      next(color, colors)
     }
-    next(color, colors)
   }
 
-  private def toTuple(color: Int) = (color >> 16 & 0xff, color >> 8 & 0xff, color & 0xff)
-  def toHSL(color: Int): (Double, Double, Double) = {
+
+  private def toTuple(color: Int) = (color >> 16 & 0xff, color >> 8 & 0xff, color & 0xff, color >> 24 & 0xff)
+  def toHSL(color: Int): (Double, Double, Double, Double) = {
     toHSL(toTuple(color))
   }
-  def toHSL(color: (Int, Int, Int)): (Double, Double, Double) = {
+  def toHSL(color: (Int, Int, Int, Int)): (Double, Double, Double, Double) = {
     val r = color._1/255.0
     val g = color._2/255.0
     val b = color._3/255.0
+    val alpha = color._4/255.0
 
     val max = Math.max(Math.max(r, g), b)
     val min = Math.min(Math.min(r, g), b)
@@ -398,18 +413,24 @@ object Ascii {
          (r - g) / d + 4
         else -1
     }
-    (h, s, l)
+    (h, s, l, alpha)
   }
 
-  def lightness(color: Int): Double = lightness(toTuple(color))
-  def lightness(color: (Int, Int, Int)): Double = {
+  def lightness(color: Int): Double = {
+    lightness(toTuple(color))
+  }
+  def lightness(color: (Int, Int, Int, Int)): Double = {
     val r = color._1/255.0
     val g = color._2/255.0
     val b = color._3/255.0
+    val alpha = color._4/255.0
 
     val max = Math.max(Math.max(r, g), b)
     val min = Math.min(Math.min(r, g), b)
 
-    (max + min)/2
+    //println(color._4)
+
+    if(alpha < 0.5) Double.NaN
+    else(max + min) / 2
   }
 }

@@ -46,6 +46,24 @@ object WikipediaEndpoint {
     Nil
   )
 
+  private val randomCache = new collection.mutable.Stack[SomePictureData] {
+    override def push(data: SomePictureData) : this.type       = synchronized(super.push(data))
+    override def pop()                       : SomePictureData = synchronized(super.pop())
+    override def size                        : Int             = synchronized(super.size)
+  }
+  private val randomTask = new Thread {
+    override def run(): Unit = {
+      while(true){
+        if(randomCache.size < 5)
+          randomCache.push(generateRandomPageData0())
+        else
+          Thread.sleep(1000)
+      }
+    }
+  }
+  randomTask.start()
+
+
 
   private def extract(query: String) = {
     val url = new URL(query)
@@ -163,13 +181,25 @@ object WikipediaEndpoint {
     getPictureData0(searchForArticle(title.replace(" ", "_")), () => NoPictureData)
   }
 
+  private object FetchLock
+
+  def generateRandomPageData(): SomePictureData =
+    if(randomCache.size == 0)
+      FetchLock synchronized {
+        randomCache.pop()
+      }
+    else randomCache.pop()
+
   // alas, no tailrec because reasons. let the stack overflow begin
-  def generateRandomPageData(): SomePictureData = {
-    val title = randomPage()
-    getPictureData0(title, () => {
-      Thread.sleep(3000)
-      generateRandomPageData()
-    }).asInstanceOf[SomePictureData]
+
+  private def generateRandomPageData0(): SomePictureData = {
+    FetchLock synchronized {
+      val title = randomPage()
+      getPictureData0(title, () => {
+        Thread.sleep(3000)
+        generateRandomPageData0()
+      }).asInstanceOf[SomePictureData]
+    }
   }
 
   val wikiURLPrefix = "http://en.wikipedia.org/wiki/"

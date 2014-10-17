@@ -10,6 +10,7 @@ import org.apache.commons.lang3.StringEscapeUtils
 
 import scala.collection.JavaConverters._
 import scala.util.Random
+import scala.util.control.NonFatal
 
 object WikipediaEndpoint {
 
@@ -55,7 +56,11 @@ object WikipediaEndpoint {
     override def run(): Unit = {
       while(true){
         if(randomCache.size < 5)
-          randomCache.push(generateRandomPageData0())
+          try {
+            randomCache.push(generateRandomPageData0())
+          } catch {
+            case NonFatal(e) => e.printStackTrace()
+          }
         else
           Thread.sleep(1000)
       }
@@ -114,6 +119,15 @@ object WikipediaEndpoint {
       .get("title").getAsString
   }
 
+  val overuseCutoff = 40
+  private def imageIsOverused(title: String): Boolean = {
+    val query = entryPoint +
+      s"?format=json&action=query&list=imageusage&iutitle=${title.replace(" ", "_")}&iulimit=$overuseCutoff&iunamespace=0"
+    val json = jparser.parse(extract(query))
+    val count = json.getAsJsonObject.getAsJsonObject("query").getAsJsonArray("imageusage").size
+    count >= overuseCutoff
+  }
+
   private def getPictureData0(_title: String, errorCallback: () => PictureData): PictureData = {
     val title = resolveRedirects(_title)
     val query = entryPoint +
@@ -133,6 +147,7 @@ object WikipediaEndpoint {
         .filter(j => (j ne null) && j.getAsJsonObject.has("title"))
         .map(_.getAsJsonObject.getAsJsonPrimitive("title").getAsString)
         .filter(s => (s ne null) && !imageBlacklist(s) && imageExtensionWhitelist(s.substring(s.lastIndexOf(".")).toLowerCase))
+        .filterNot(imageIsOverused)
         .toSeq
       if (images.isEmpty) {
         errorCallback()

@@ -190,7 +190,7 @@ object Ascii {
       val locH = rand.nextInt(height)
       //println((locW, locH))
       val c = lines(locH)(locW)
-      if(!char2val.contains(c) || char2val(c) < 0.15)
+      if(!char2val.contains(c) || char2val(c) < 0.2)
         break()
       val allowedColors = {
         val slice = colors.filter(t => (t._1 - char2val(c)).abs < 0.05D)
@@ -321,28 +321,39 @@ object Ascii {
 
   def toAscii(image: BufferedImage): String = {
     val invert = Main.gui.invert.isSelected
+    val background = toTuple(if(invert) 0xffffffff else 0xff000000)
     val chars =
       for(y <- Iterator.tabulate((image.getHeight/aspectRatio).toInt)(_ * aspectRatio))
-        yield for(x <- 0 until image.getWidth)
+        yield {
+          val nextInt = (y + aspectRatio).toInt
+          val upperLength = (y - nextInt).abs
+          val lowerLength = y + aspectRatio - nextInt
+          //println((y, upperLength, lowerLength))
+          for(x <- 0 until image.getWidth)
           yield {
             val hsl = lightness({
-              val nextInt = (y + 0.5).toInt
               val upper = toTuple(image.getRGB(x, nextInt))
               val lower = toTuple(image.getRGB(x, nextInt + 1))
-              val upperLength = nextInt - y
-              val lowerLength = y + aspectRatio - nextInt
+              val alpha = (upper._4 * upperLength + lower._4 * lowerLength) / 2 / 255.0
+              /*if(alpha != 0){
+                println((upperLength, lowerLength))
+                println((upper._4, lower._4))
+                println(alpha + " " + (x, y))
+              }*/
+
               (
-                (upper._1 * upperLength + lower._1 * lowerLength)./(2).toInt,
-                (upper._2 * upperLength + lower._2 * lowerLength)./(2).toInt,
-                (upper._3 * upperLength + lower._3 * lowerLength)./(2).toInt,
-                (upper._4 * upperLength + lower._4 * lowerLength)./(2).toInt
+                ((upper._1 * upperLength + lower._1 * lowerLength) / 2 * alpha + background._1 * (1 - alpha)).toInt,
+                ((upper._2 * upperLength + lower._2 * lowerLength) / 2 * alpha + background._2 * (1 - alpha)).toInt,
+                ((upper._3 * upperLength + lower._3 * lowerLength) / 2 * alpha + background._3 * (1 - alpha)).toInt,
+                1
               )
             })
             if(invert)
-              getChar(hsl)
-            else
               getChar(1-hsl)
+            else
+              getChar(hsl)
           }
+        }
     chars.map(_.mkString("")).mkString("\n")
   }
 
@@ -361,25 +372,22 @@ object Ascii {
 
   def getChar(color: Int): Char = getChar(color / 255.0)
   def getChar(color: Double) = {
-    if(color.isNaN) ' '
-    else {
-      def next(d: Double, l: Array[(Double, Char)]): Char = {
-        //println(l.mkString("[", ",", "]"))
-        val mid = (l.length - 1) / 2
-        if (l(mid)._1 == d) l(mid)._2
-        else if (l.length == 2) {
-          val (d1, c1) = l(0)
-          val (d2, c2) = l(1)
-          if (d - d1 < d2 - d)
-            c1
-          else c2
-        } else if (l(mid)._1 < d)
-          next(d, l.takeRight(l.length / 2))
-        else
-          next(d, l.take(l.length / 2))
-      }
-      next(color, colors)
+    def next(d: Double, l: Array[(Double, Char)]): Char = {
+      //println(l.mkString("[", ",", "]"))
+      val mid = (l.length - 1)/2
+      if(l(mid)._1 == d) l(mid)._2
+      else if(l.length == 2){
+        val (d1, c1) = l(0)
+        val (d2, c2) = l(1)
+        if(d - d1 < d2 - d)
+          c1
+        else c2
+      } else if (l(mid)._1 < d)
+        next(d, l.takeRight(l.length/2))
+      else
+        next(d, l.take(l.length/2))
     }
+    next(color, colors)
   }
 
 
@@ -428,9 +436,6 @@ object Ascii {
     val max = Math.max(Math.max(r, g), b)
     val min = Math.min(Math.min(r, g), b)
 
-    //println(color._4)
-
-    if(alpha < 0.5) Double.NaN
-    else(max + min) / 2
+    (max + min) / 2
   }
 }

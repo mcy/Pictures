@@ -178,14 +178,14 @@ object GuiUtils {
     (box, pan)
   }
 
-  def desktopSupported = Desktop.isDesktopSupported && Desktop.getDesktop.isSupported(Desktop.Action.BROWSE)
+  lazy val desktop = {
+    if(Desktop.isDesktopSupported && Desktop.getDesktop.isSupported(Desktop.Action.BROWSE)){
+      Some(Desktop.getDesktop)
+    } else None
+  }
 
-  def openWebpage(uri: URI) =
-    if(desktopSupported) {
-      Desktop.getDesktop.browse(uri)
-    }
+  def openWebpage(uri: URI) = desktop.foreach(_.browse(uri))
 
-  def openWebpage(url: URL): Unit =
-    this.openWebpage(url.toURI)
+  def openWebpage(url: URL): Unit = openWebpage(url.toURI)
 
 }

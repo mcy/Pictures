@@ -91,7 +91,7 @@ object Ascii {
     zip.sum / a.length
   }
 
-  val distanceCutoff = 0.15D //magic number!
+  val distanceCutoff = 0.25D //magic number!
   def sprinkleKeywords(image: String, words: Seq[String]): String = {
     import collection.mutable
     if(words.isEmpty) return image
@@ -114,7 +114,7 @@ object Ascii {
 
     for((w, i) <- words.zipWithIndex){
       //println((w, i))
-        for(_ <- 1 to (words.size - i) * 15) {
+        for(_ <- 1 to (words.size - i) * 8) {
           var best = (Double.MaxValue, (-1, -1))
           while (hardCountdown > 0){
 
@@ -123,7 +123,10 @@ object Ascii {
 
             val region = lines(locH).substring(locW, locW + w.length)
 
-            if(!(best._2._1 to best._2._1 + w.length).map((_, best._2._2)).exists(usedPoints(_))) {
+            //println(locW, locH)
+            //println((locW to locW + w.length).map((_, locH)).toSet & usedPoints)
+
+            if(!(locW to locW + w.length).map((_, locH)).exists(usedPoints(_))) {
               val dist = distance(w, region)
               //println(dist)
               if (dist < best._1) {
@@ -134,9 +137,11 @@ object Ascii {
           }
           hardCountdown = 50
           //println(best._1)
+          /*val cut = distanceCutoff * (1 - Math.min(1, rand.nextGaussian())).abs
+          println(cut)*/
           if(best._1 <= distanceCutoff) {
             setString(w, best._2._1, best._2._2)
-            usedPoints ++= (best._2._1 to best._2._1 + w.length).map((_, best._2._2))
+            usedPoints ++= (best._2._1 - 1 to best._2._1 + w.length + 1) map ((_, best._2._2))
           }
         }
     }
@@ -333,7 +338,7 @@ object Ascii {
           yield {
             val hsl = lightness({
               val upper = toTuple(image.getRGB(x, nextInt))
-              val lower = toTuple(image.getRGB(x, nextInt + 1))
+              val lower = toTuple(image.getRGB(x, Math.min(nextInt + 1, image.getHeight - 1)))
               val alpha = (upper._4 * upperLength + lower._4 * lowerLength) / 2 / 255.0
               /*if(alpha != 0){
                 println((upperLength, lowerLength))

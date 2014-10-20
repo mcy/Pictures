@@ -39,7 +39,7 @@ object WikipediaEndpoint {
     val wordFreq = WordUtils.wordsByFreq(article.mkString(" "))
   }
   object NoPictureData extends PictureData
-  object TitlePage extends SomePictureData(
+  object TitlePage extends SomePictureData (
     "Ascii Wikipedia Browser",
     ImageIO.read(this.getClass.getResourceAsStream("/titlecard.png")),
     Nil,
@@ -61,8 +61,10 @@ object WikipediaEndpoint {
           } catch {
             case NonFatal(e) => e.printStackTrace()
           }
-        else
+        else {
+          resetStatus()
           Thread.sleep(1000)
+        }
       }
     }
   }
@@ -71,6 +73,7 @@ object WikipediaEndpoint {
 
 
   private def extract(query: String) = {
+    setStatus(query)
     val url = new URL(query)
     val conn = url.openConnection()
     val reader = new BufferedReader(new InputStreamReader(conn.getInputStream))
@@ -131,7 +134,7 @@ object WikipediaEndpoint {
   private def getPictureData0(_title: String, errorCallback: () => PictureData): PictureData = {
     val title = resolveRedirects(_title)
     val query = entryPoint +
-      s"?format=json&action=query&titles=${title.replace(" ", "_")}&prop=images|links&plnamespace=0&pllimit=450"
+      s"?format=json&action=query&titles=${title.replace(" ", "_")}&prop=images|links&plnamespace=0&pllimit=0"
     val _json = jparser.parse(extract(query))
     if(!_json.isJsonObject)
       return errorCallback()
@@ -193,7 +196,7 @@ object WikipediaEndpoint {
   }
 
   def getPictureData(title: String): PictureData = {
-    getPictureData0(searchForArticle(title.replace(" ", "_")), () => NoPictureData)
+    getPictureData0(searchForArticle(title.replace(' ', '_')), () => NoPictureData)
   }
 
   private object FetchLock
@@ -219,4 +222,7 @@ object WikipediaEndpoint {
 
   val wikiURLPrefix = "http://en.wikipedia.org/wiki/"
   def articleURL(title: String) = new URL(wikiURLPrefix + title.replace(' ', '_'))
+
+  def resetStatus() = Main.gui.resetStatus()
+  def setStatus(message: String) = Main.gui.setStatus(message)
 }

@@ -78,12 +78,31 @@ object Main {
         ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
         ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED
       )*/,
-      BorderLayout.CENTER
+      BorderLayout.NORTH
     )
     console.setBackground(Color.BLACK)
     console.setForeground(Color.WHITE)
 
-    val controls = new JPanel
+    private val status = new JLabel(" ")
+    status.setFont(new Font("Menlo", Font.PLAIN, 6))
+
+    def resetStatus() = setStatus(" ")
+    def setStatus(message: String) =
+      status synchronized {
+        status.setText(message)
+      }
+
+    add (
+      new JPanel {
+        this.setLayout(new BoxLayout(this, BoxLayout.LINE_AXIS))
+        this.add(Box.createHorizontalGlue())
+        this.add(status)
+        this.add(Box.createHorizontalGlue())
+      },
+      BorderLayout.CENTER
+    )
+
+    private val controls = new JPanel
 
     add (
       controls,
@@ -183,12 +202,9 @@ object Main {
 
     controls.add(reloadButton)
 
-    val openButton =
-      if(desktopSupported)
-        Some(new JButton("Open in Browser"))
-      else None
+    val openButton = desktop.map(_ => new JButton("Open in Browser"))
 
-    openButton map { openButton =>
+    openButton foreach { openButton =>
       openButton act {
         val title =
           if(History.now == TitlePage)
@@ -211,6 +227,7 @@ object Main {
     def consoleSize = (console.getColumns, console.getRows)
 
     def makeNewImage(data: SomePictureData): Unit = {
+      console.setSize(100, 450)
       val img = Ascii.scaleToFit(data.img, consoleSize)
       val picture = Ascii.toAscii(img)
       setTitle(data.name)

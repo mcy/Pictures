@@ -168,14 +168,6 @@ object Main {
 
     //disabled because the images are not sent in order anyways.
     useRandom.setSelected(true)
-    /*controls.add (
-      randomPan,
-      Layout(
-        x = 3,
-        y = 0,
-        anchor = West
-      )
-    )*/
 
     val (invert, invertPan) = checkboxAct("  Invert colors:") { box =>
       if(box.isSelected){

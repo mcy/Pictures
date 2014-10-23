@@ -104,7 +104,6 @@ object WikipediaEndpoint {
     val query = entryPoint + s"?format=json&action=opensearch&search=$search&namespace=0&limit=1&format=json"
     val data = extract(query)
     val json = jparser.parse(data)
-    //println(gson.toJson(json))
     val array = json.getAsJsonArray.get(1).getAsJsonArray
     if(array.size() == 0)
       ""
@@ -140,7 +139,6 @@ object WikipediaEndpoint {
       return errorCallback()
     val json = _json.getAsJsonObject
     val page = json.getAsJsonObject("query").getAsJsonObject("pages").entrySet().asScala.head.getValue.getAsJsonObject
-    //println(gson.toJson(json))
     val name = page.getAsJsonPrimitive("title").getAsString
     if(page.get("images") eq null){
       errorCallback()
@@ -179,7 +177,6 @@ object WikipediaEndpoint {
     val text = paragraph.findAllMatchIn(raw).map(_.group(1))//.toSeq
     val clean = text.map(s => tag.replaceAllIn(s, "").replaceAll("\\s+", " ")).filter(_.nonEmpty)
     val res = clean.map(StringEscapeUtils.unescapeHtml4).toSeq
-    //println(text.zip(clean).map(t => t._1 + "\n" + t._2).mkString("\n\n"))
     articleCache += (title -> res)
     res
     })

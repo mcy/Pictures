@@ -24,7 +24,6 @@ object WordUtils {
     val words = text.split("[\\s-—]+").map{ s =>
       s.toLowerCase.replace("'s", "").replaceAll("""[^\p{IsAlphabetic}]""", "")
     }.filterNot(commonWords(_)).filter(_.nonEmpty).sorted
-    //println(words.mkString("\n"))
     val counts = mutable.Map.empty[String, Int]
     var last = words.head
     var count = 0

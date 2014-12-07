@@ -11,7 +11,7 @@ import scala.util.Random
 object Ascii {
 
   private val rand = new Random
-  private val (colors, aspectRatio) = {
+  private val (colors, _aspectRatio) = {
     val jparser = new JsonParser
     val stream = this.getClass.getResourceAsStream("/palette.json")
     val json = jparser.parse(new InputStreamReader(stream))
@@ -23,6 +23,8 @@ object Ascii {
     val max = arr.maxBy(_._1)._1
     (arr.map(t => (t._1 / max, t._2)), asp)
   }
+
+  val aspectRatio = _aspectRatio
 
   //private val chars = colors.zipWithIndex.map(t => (t._1._2, t._2)).toMap
   private val char2val = colors.map(_.swap).toMap
@@ -274,7 +276,7 @@ object Ascii {
   }
 
   def toAscii(image: BufferedImage): String = {
-    val invert = Main.gui.invert.isSelected
+    val invert = Main.gui.properties.inverted
     val background = toTuple(if(invert) 0xffffffff else 0xff000000)
     val chars =
       for(y <- Iterator.tabulate((image.getHeight/aspectRatio).toInt)(_ * aspectRatio))

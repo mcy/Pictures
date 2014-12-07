@@ -1,9 +1,10 @@
 package com.xorinc.pictures
 
 import java.awt.event._
-import java.awt.{Desktop, GridBagConstraints, GridBagLayout}
+import java.awt.{Component, Desktop, GridBagConstraints, GridBagLayout}
 import java.net.{URL, URI}
-import javax.swing.{JLabel, JCheckBox, JPanel}
+import javax.swing.event.{ListSelectionListener, ListSelectionEvent}
+import javax.swing.{JList, JLabel, JCheckBox, JPanel}
 import javax.swing.border.Border
 
 object GuiUtils {
@@ -187,5 +188,27 @@ object GuiUtils {
   def openWebpage(uri: URI) = desktop.foreach(_.browse(uri))
 
   def openWebpage(url: URL): Unit = openWebpage(url.toURI)
+
+  def onResize(f: ComponentEvent => Unit) = new ComponentAdapter {
+    override def componentResized(e: ComponentEvent): Unit = f(e)
+  }
+
+  def makePanel(comps: Component*): JPanel = {
+    val p = new JPanel
+    for(comp <- comps)
+      p.add(comp)
+    p
+  }
+
+  def onClose(f: WindowEvent => Unit) = new WindowAdapter {
+    override def windowClosed(e: WindowEvent): Unit = f(e)
+  }
+
+  implicit class OnSelect(val l: JList[_]) extends AnyVal {
+
+    def onSelect(f: ListSelectionEvent => Unit): Unit = l.addListSelectionListener(new ListSelectionListener {
+      override def valueChanged(e: ListSelectionEvent): Unit = f(e)
+    })
+  }
 
 }
